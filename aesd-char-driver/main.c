@@ -66,12 +66,18 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
     for (level = 0 ; level < 10 ; level++)
     {
         PDEBUG("string at index = %d is %s ", level, (dev->buff).entry[level].buffptr);
+        if (mutex_lock_interruptible(&dev->rw_lock))
+        {
+            return -ERESTARTSYS;
+        }
         struct aesd_buffer_entry *rtnentry = aesd_circular_buffer_find_entry_offset_for_fpos(&dev->buff, totalSize, &offset_rtn);
+        mutex_unlock(&dev->rw_lock);
+
         if (rtnentry == NULL)
         {
             break;
         }
-        prevSize = rtnentry->size + 1;
+        prevSize = rtnentry->size;
         totalSize += prevSize;
         PDEBUG("prevSize = %d, totalSize = %d, string = %s", prevSize, totalSize, rtnentry->buffptr);
         if (level)
@@ -84,6 +90,7 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
         }
         
         PDEBUG("concatenated string became: %s", retBuff);
+        //kfree(rtnentry);
     }
 
     if (copy_to_user(buf, retBuff, strlen(retBuff)))
@@ -108,12 +115,6 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
      * TODO: handle write
      */
     struct aesd_dev *dev = filp->private_data;
-    if (dev->entry == NULL)
-    {
-        dev->entry = kmalloc(sizeof(struct aesd_buffer_entry), GFP_KERNEL);
-        dev->entry->buffptr = kmalloc((count + 1) * sizeof(char), GFP_KERNEL);
-        dev->entry->buffptr[0] = '\0';
-    }
     char* newBuff = kmalloc((count + 1) * sizeof(char), GFP_KERNEL);
     if (copy_from_user(newBuff, buf, count))
     {
@@ -123,17 +124,37 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
     else
     {
         newBuff[count] = '\0';
+        if (mutex_lock_interruptible(&dev->cursor_lock))
+        {
+            return -ERESTARTSYS;
+        }
+		
+        if (dev->entry == NULL)
+        {
+            dev->entry = kmalloc(sizeof(struct aesd_buffer_entry), GFP_KERNEL);
+            dev->entry->buffptr = kmalloc((count + 1) * sizeof(char), GFP_KERNEL);
+            dev->entry->buffptr[0] = '\0';
+        }
         strcat(dev->entry->buffptr, newBuff);
         if (newBuff[count - 1] == '\n')
         {
             dev->entry->size = strlen(dev->entry->buffptr);
+            if (mutex_lock_interruptible(&dev->rw_lock))
+            {
+                mutex_unlock(&dev->rw_lock);
+                return -ERESTARTSYS;
+            }
             aesd_circular_buffer_add_entry(&dev->buff, dev->entry);
+            mutex_unlock(&dev->rw_lock);
+            //kfree(dev->entry->buffptr);
+            //kfree(dev->entry);
             dev->entry = NULL;
         }
+        mutex_unlock(&dev->cursor_lock);
         *f_pos += count;
         retval = count;
     }
-
+    kfree(newBuff);
     return retval;
 }
 struct file_operations aesd_fops = {
