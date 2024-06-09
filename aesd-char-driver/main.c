@@ -21,7 +21,7 @@
 int aesd_major =   0; // use dynamic major
 int aesd_minor =   0;
 
-MODULE_AUTHOR("Your Name Here"); /** TODO: fill in your name **/
+MODULE_AUTHOR("Kareem Ibrahim"); /** TODO: fill in your name **/
 MODULE_LICENSE("Dual BSD/GPL");
 
 struct aesd_dev aesd_device;
@@ -32,6 +32,11 @@ int aesd_open(struct inode *inode, struct file *filp)
     /**
      * TODO: handle open
      */
+    struct aesd_dev *dev;
+    dev = container_of(inode->i_cdev, struct aesd_dev, cdev);
+    //aesd_circular_buffer_init(&dev->buff);
+    filp->private_data = dev;
+
     return 0;
 }
 
@@ -52,6 +57,45 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
     /**
      * TODO: handle read
      */
+    struct aesd_dev *dev = filp->private_data;
+    size_t offset_rtn = 0;
+    size_t prevSize = 0;
+    size_t totalSize = 0;
+    char* retBuff = kmalloc(1000 * sizeof(char), GFP_KERNEL);
+    int level = 0;
+    for (level = 0 ; level < 10 ; level++)
+    {
+        PDEBUG("string at index = %d is %s ", level, (dev->buff).entry[level].buffptr);
+        struct aesd_buffer_entry *rtnentry = aesd_circular_buffer_find_entry_offset_for_fpos(&dev->buff, totalSize, &offset_rtn);
+        if (rtnentry == NULL)
+        {
+            break;
+        }
+        prevSize = rtnentry->size + 1;
+        totalSize += prevSize;
+        PDEBUG("prevSize = %d, totalSize = %d, string = %s", prevSize, totalSize, rtnentry->buffptr);
+        if (level)
+        {
+            strcat(retBuff, rtnentry->buffptr);
+        }
+        else
+        {
+            strcpy(retBuff, rtnentry->buffptr);
+        }
+        
+        PDEBUG("concatenated string became: %s", retBuff);
+    }
+
+    if (copy_to_user(buf, retBuff, strlen(retBuff)))
+    {
+		retval = -EFAULT;
+	}
+    else
+    {
+        retval = strlen(retBuff);
+        *f_pos -= count;
+    }
+    kfree(retBuff);
     return retval;
 }
 
@@ -63,6 +107,23 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
     /**
      * TODO: handle write
      */
+    struct aesd_dev *dev = filp->private_data;
+    struct aesd_buffer_entry *entry = kmalloc(sizeof(struct aesd_buffer_entry), GFP_KERNEL);
+    entry->buffptr = kmalloc((count + 1) * sizeof(char), GFP_KERNEL);
+    if (copy_from_user(entry->buffptr, buf, count))
+    {
+        PDEBUG("Couldn't copy buf from user space");
+        retval = -EFAULT;
+    }
+    else
+    {
+        entry->buffptr[count] = '\0';
+        entry->size = count;
+        aesd_circular_buffer_add_entry(&dev->buff, entry);
+        *f_pos += count;
+        retval = count;
+    }
+
     return retval;
 }
 struct file_operations aesd_fops = {

@@ -34,4 +34,5 @@ else
 fi
 
 set -e
+bitbake -c cleanall aesd-char-driver
 bitbake core-image-aesd

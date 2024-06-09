@@ -15,7 +15,6 @@
 #endif
 
 #include "aesd-circular-buffer.h"
-
 /**
  * @param buffer the buffer to search for corresponding offset.  Any necessary locking must be performed by caller.
  * @param char_offset the position to search for in the buffer list, describing the zero referenced
@@ -32,6 +31,70 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
     /**
     * TODO: implement per description
     */
+    #ifdef __KERNEL__
+    struct aesd_buffer_entry *entryptr = kmalloc(sizeof(struct aesd_buffer_entry), GFP_KERNEL);
+    #else
+    struct aesd_buffer_entry *entryptr = (struct aesd_buffer_entry*) malloc(sizeof(struct aesd_buffer_entry));
+    #endif
+
+    uint8_t index;
+    size_t sum = 0;
+    AESD_CIRCULAR_BUFFER_FOREACH(entryptr, buffer, index)
+    {
+        sum += entryptr->size;
+    }
+    if (buffer->full && (buffer->out_offs == buffer->in_offs))
+    {
+        AESD_CIRCULAR_BUFFER_FOREACH(entryptr, buffer, index)
+        {
+            if (index < buffer->out_offs)
+            {
+                continue;
+            }
+            if (char_offset < entryptr->size)
+            {
+                *entry_offset_byte_rtn = char_offset;
+                return entryptr;
+            }
+            else
+            {
+                char_offset -= entryptr->size;
+            }
+        }
+
+        AESD_CIRCULAR_BUFFER_FOREACH(entryptr, buffer, index)
+        {
+            if (index >= buffer->in_offs)
+            {
+                break;
+            }
+            if (char_offset < entryptr->size)
+            {
+                *entry_offset_byte_rtn = char_offset;
+                return entryptr;
+            }
+            else
+            {
+                char_offset -= entryptr->size;
+            }
+        }
+    }
+    else
+    {
+        AESD_CIRCULAR_BUFFER_FOREACH(entryptr, buffer, index)
+        {
+            PDEBUG("current string is: %s", entryptr->buffptr);
+            if (char_offset < entryptr->size)
+            {
+                *entry_offset_byte_rtn = char_offset;
+                return entryptr;
+            }
+            else
+            {
+                char_offset -= entryptr->size;
+            }
+        }
+    }
     return NULL;
 }
 
@@ -47,6 +110,38 @@ void aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const s
     /**
     * TODO: implement per description
     */
+
+    uint8_t currentInPtr = buffer->in_offs;
+    uint8_t currentOutPtr = buffer->out_offs;
+
+    if (buffer->full)
+    {
+        if (currentInPtr == 1)
+        {
+            buffer->entry[0] = *add_entry;
+        }
+        else
+        {
+            buffer->entry[currentInPtr++] = *add_entry;
+            if (currentInPtr == AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED)
+            {
+                currentInPtr = 1;
+            }
+        }
+        currentOutPtr = currentInPtr;
+    }
+    else
+    {
+        buffer->entry[currentInPtr++] = *add_entry;
+        if (currentInPtr == AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED)
+        {
+            currentInPtr = 1;
+            buffer->full = true;
+        }
+    }
+    
+    buffer->in_offs = currentInPtr;
+    buffer->out_offs = currentOutPtr;
 }
 
 /**
