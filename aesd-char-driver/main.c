@@ -61,7 +61,7 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
     size_t offset_rtn = 0;
     size_t prevSize = 0;
     size_t totalSize = 0;
-    char* retBuff = kmalloc(1000 * sizeof(char), GFP_KERNEL);
+    char* retBuff = kmalloc(count * sizeof(char), GFP_KERNEL);
     int level = 0;
     for (level = 0 ; level < 10 ; level++)
     {
@@ -108,18 +108,28 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
      * TODO: handle write
      */
     struct aesd_dev *dev = filp->private_data;
-    struct aesd_buffer_entry *entry = kmalloc(sizeof(struct aesd_buffer_entry), GFP_KERNEL);
-    entry->buffptr = kmalloc((count + 1) * sizeof(char), GFP_KERNEL);
-    if (copy_from_user(entry->buffptr, buf, count))
+    if (dev->entry == NULL)
+    {
+        dev->entry = kmalloc(sizeof(struct aesd_buffer_entry), GFP_KERNEL);
+        dev->entry->buffptr = kmalloc((count + 1) * sizeof(char), GFP_KERNEL);
+        dev->entry->buffptr[0] = '\0';
+    }
+    char* newBuff = kmalloc((count + 1) * sizeof(char), GFP_KERNEL);
+    if (copy_from_user(newBuff, buf, count))
     {
         PDEBUG("Couldn't copy buf from user space");
         retval = -EFAULT;
     }
     else
     {
-        entry->buffptr[count] = '\0';
-        entry->size = count;
-        aesd_circular_buffer_add_entry(&dev->buff, entry);
+        newBuff[count] = '\0';
+        strcat(dev->entry->buffptr, newBuff);
+        if (newBuff[count - 1] == '\n')
+        {
+            dev->entry->size = strlen(dev->entry->buffptr);
+            aesd_circular_buffer_add_entry(&dev->buff, dev->entry);
+            dev->entry = NULL;
+        }
         *f_pos += count;
         retval = count;
     }
