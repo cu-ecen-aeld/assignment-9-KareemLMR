@@ -15,11 +15,13 @@ S = "${WORKDIR}/${PN}"
 
 # TODO: Add the aesdsocket application and any other files you need to install
 # See https://git.yoctoproject.org/poky/plain/meta/conf/bitbake.conf?h=kirkstone
-#INITDIR="${sysconfdir}/init.d"
-#FILES:${PN} += "\
-#                   ${bindir}/aesdsocket \
-#                   ${INITDIR}/S99aesdsocket \
-#               "
+INITDIR="${sysconfdir}/init.d"
+FILES:${PN} += "\
+                   ${INITDIR}/aesdchar_load \
+                   ${INITDIR}/aesdchar_unload \
+                   ${INITDIR}/S98aesdcharmodule \
+                   ${sysconfdir}/rc5.d/S98aesdcharmodule \
+               "
 
 INSANE_SKIP:${PN} += "ldflags"
 # TODO: customize these as necessary for any libraries you need for your application
@@ -44,4 +46,12 @@ do_compile () {
 do_install() {
     install -d ${D}/lib/modules/${KERNEL_VERSION}/extra
     install -m 0644 ${S}/aesdchar.ko ${D}/lib/modules/${KERNEL_VERSION}/extra
+    
+    install -d ${D}${INITDIR}
+    install -m 0755 ${S}/aesdchar_load ${D}${INITDIR}/aesdchar_load
+    install -m 0755 ${S}/aesdchar_unload ${D}${INITDIR}/aesdchar_unload
+    install -m 0755 ${S}/S98aesdcharmodule ${D}${INITDIR}/S98aesdcharmodule
+
+    install -d ${D}${sysconfdir}/rc5.d
+    ln -sf ../init.d/S98aesdcharmodule ${D}${sysconfdir}/rc5.d/S98aesdcharmodule
 }
