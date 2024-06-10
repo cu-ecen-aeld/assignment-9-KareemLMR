@@ -2,17 +2,17 @@
 LICENSE = "MIT"
 LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/MIT;md5=0835ade698e0bcf8506ecda2f7b4f302"
 
-FILESEXTRAPATHS:prepend := "${WORKSPACE_AESD}:"
-
-SRC_URI = "file://${PN}"
-
 inherit module
 # This sets your staging directory based on WORKDIR, where WORKDIR is defined at 
 # https://docs.yoctoproject.org/ref-manual/variables.html?highlight=workdir#term-WORKDIR
 # We reference the "server" directory here to build from the "server" directory
 # in your assignments repo
-S = "${WORKDIR}/${PN}"
+SRC_URI = "git://git@github.com/cu-ecen-aeld/assignments-3-and-later-KareemLMR;protocol=ssh;branch=main"
+PV = "1.0+git${SRCPV}"
+# TODO: set to reference a specific commit hash in your assignment repo
+SRCREV = "e7780ac040d1110a3ea27fc19d366537cc0b958c"
 
+S = "${WORKDIR}/git/aesd-char-driver"
 # TODO: Add the aesdsocket application and any other files you need to install
 # See https://git.yoctoproject.org/poky/plain/meta/conf/bitbake.conf?h=kirkstone
 INITDIR="${sysconfdir}/init.d"
