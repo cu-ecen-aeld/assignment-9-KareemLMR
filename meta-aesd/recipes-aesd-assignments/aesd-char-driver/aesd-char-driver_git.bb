@@ -10,7 +10,7 @@ inherit module
 SRC_URI = "git://git@github.com/cu-ecen-aeld/assignments-3-and-later-KareemLMR;protocol=ssh;branch=main"
 PV = "1.0+git${SRCPV}"
 # TODO: set to reference a specific commit hash in your assignment repo
-SRCREV = "d50c6b3082086441c4443ceb9901395b87a294b4"
+SRCREV = "1d9056d91ee1f6ad3d1b4df86c739a6a73bf5bed"
 
 S = "${WORKDIR}/git/aesd-char-driver"
 # TODO: Add the aesdsocket application and any other files you need to install
